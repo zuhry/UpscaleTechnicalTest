@@ -1,0 +1,102 @@
+﻿@model IEnumerable<UpscaleTechnicalTest.Models.TodoModel>
+
+@{
+    ViewData["Title"] = "Todo List";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<p>
+    <a asp-action="Create">Add New</a>
+</p>
+
+<table id="table" class="table table-striped" data-search="true" data-sortable="true" data-sort-name="0" data-sort-order="asc" data-pagination="true" data-page-size="5" data-filter-control="true" data-show-search-clear-button="true">
+    <thead>
+        <tr>
+            <th data-sortable="true">
+                #
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.Title)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Description)
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.Scope)
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.Priority)
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.Deadline)
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.IsCompleted)
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.CreatedDate)
+            </th>
+            <th data-sortable="true">
+                @Html.DisplayNameFor(model => model.UpdatedDate)
+            </th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            var itemCount = 1;
+            foreach (var item in Model)
+            {
+                <tr>
+                    <td>
+                        @Html.DisplayFor(modelItem => itemCount)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Title)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Description)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Scope)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Priority)
+                    </td>
+                    <td>
+                        @item.Deadline.ToString("dd-MMM-yyyy HH:mm")
+                    </td>
+                    <td>
+                        @(item.IsCompleted is null ? "Not Set" : item.IsCompleted.ToString())
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.CreatedDate)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.UpdatedDate)
+                    </td>
+                    <td>
+                        <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
+                        @{
+                            if (item.IsCompleted is null || !item.IsCompleted.Value){
+                                <text>
+                                    <a asp-action="MarkAsCompleted" asp-route-id="@item.Id">Mark As Completed</a> |
+                                </text>
+                            }
+                        }
+                        <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
+                    </td>
+                </tr>
+                itemCount = itemCount + 1;
+            }
+        }
+    </tbody>
+</table>
+
+<script>
+    $(function () {
+        $("#table").bootstrapTable();
+    });
+</script>
