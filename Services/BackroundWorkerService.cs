@@ -32,7 +32,7 @@ public class BackroundWorkerService : BackgroundService
                 try
                 {
                     var todoService = scope.ServiceProvider.GetRequiredService<ITodoService>();
-                    var actionRes = await todoService.SendExpiredItemNotification_UsingSMTP();
+                    var actionRes = await todoService.SendExpiredItemNotification();
                     if (actionRes.Error.status)
                         _logger.LogError(actionRes.Error.error);
                 }

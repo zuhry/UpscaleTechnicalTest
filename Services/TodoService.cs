@@ -1,12 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SendGrid.Helpers.Mail;
 using SendGrid;
+using SendGrid.Helpers.Mail;
+using System.Net;
+using System.Net.Mail;
 using UpscaleTechnicalTest.Core;
 using UpscaleTechnicalTest.Data;
 using UpscaleTechnicalTest.Models;
-using System.Configuration;
-using System.Net.Mail;
-using System.Net;
 
 namespace UpscaleTechnicalTest.Services;
 
@@ -100,53 +99,18 @@ public class TodoService : ITodoService
         return new Result<TodoModel, string>(todoModel);
     }
 
-    public async Task<Result<bool, string>> SendExpiredItemNotification_UsingSendGridAPI()
+    public async Task<Result<bool, string>> SendExpiredItemNotification()
     {
-        var apiKey = _configuration.GetSection("SendgridAPIKey").Value;
-        var client = new SendGridClient(apiKey);
-        var from = new EmailAddress(_configuration.GetSection("SendgridEmailFrom").Value, _configuration.GetSection("SendgridEmailName").Value);
-
-        //get expired or nearly expired items
-        IQueryable<TodoModel> query = _context.Set<TodoModel>();
-        var items = await query.Where(w => w.Deadline <= DateTime.Now.AddDays(1) && (w.IsCompleted == null || !w.IsCompleted.Value) && !w.IsNotificationSend).ToListAsync();
-
-        foreach (var item in items)
-        {
-            //send notification email
-            if (!string.IsNullOrEmpty(item.EmailNotification))
-            {
-                _logger.LogInformation("Trying to send email notification to {email}", item.EmailNotification);
-
-                var subject = "Please check your task";
-                var to = new EmailAddress(item.EmailNotification, item.EmailNotification);
-                var plainTextContent = $"Your task {item.Title} will expire at {item.Deadline:dd-MMM-yyyy HH:mm}";
-                var htmlContent = $"<strong>Your task {item.Title} will expire at {item.Deadline:dd-MMM-yyyy HH:mm}</strong>";
-                var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
-                var response = await client.SendEmailAsync(msg);
-
-                if (response.IsSuccessStatusCode)
-                    _logger.LogInformation("Email successfully send at: {time}", DateTimeOffset.Now);
-                else
-                    _logger.LogError("Error while sending email: {error}", await response.Body.ReadAsStringAsync());
-            }
-
-            item.IsNotificationSend = true;
-            _context.Todos.Update(item);
-            await _context.SaveChangesAsync();
-        }
-
-        return new Result<bool, string>(true);
-    }
-
-    public async Task<Result<bool, string>> SendExpiredItemNotification_UsingSMTP()
-    {
-        var senderEmailFrom = _configuration.GetSection("SenderEmailFrom").Value;
-        var senderEmailPassword = _configuration.GetSection("SenderEmailPassword").Value;
-
-        var smtpClient = new SmtpClient("smtp.gmail.com")
+        var senderEmailProvider = _configuration.GetSection("SenderEmailProvider").Value;
+        var sendgridAPIKey = _configuration.GetSection("SendgridAPIKey").Value;
+        var sendGridClient = new SendGridClient(sendgridAPIKey);
+        var sendgridFrom = new EmailAddress(_configuration.GetSection("SendgridEmailFrom").Value, _configuration.GetSection("SendgridEmailName").Value);
+        var googleSMTPEmailAddress = _configuration.GetSection("GoogleSMTPEmailAddress").Value;
+        var googleSMTPEmailPassword = _configuration.GetSection("GoogleSMTPEmailPassword").Value;
+        var googleSMTPClient = new SmtpClient("smtp.gmail.com")
         {
             Port = 587,
-            Credentials = new NetworkCredential(senderEmailFrom, senderEmailPassword),
+            Credentials = new NetworkCredential(googleSMTPEmailAddress, googleSMTPEmailPassword),
             EnableSsl = true,
         };
 
@@ -156,31 +120,49 @@ public class TodoService : ITodoService
 
         foreach (var item in items)
         {
+            var subject = "Please check your task";
+            var plainTextContent = $"Your task {item.Title} will expire at {item.Deadline:dd-MMM-yyyy HH:mm}";
+            var htmlContent = $"<strong>Your task {item.Title} will expire at {item.Deadline:dd-MMM-yyyy HH:mm}</strong>";
+
             //send notification email
             if (!string.IsNullOrEmpty(item.EmailNotification))
             {
                 _logger.LogInformation("Trying to send email notification to {email}", item.EmailNotification);
 
-                try
+                if (senderEmailProvider.Equals("GoogleSMTP", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    var mailMessage = new MailMessage
+                    try
                     {
-                        From = new MailAddress(senderEmailFrom),
-                        To = { item.EmailNotification },
-                        Subject = "Please check your task",
-                        Body = $"<strong>Your task {item.Title} will expire at {item.Deadline:dd-MMM-yyyy HH:mm}</strong>",
-                        IsBodyHtml = true,
-                    };
+                        var mailMessage = new MailMessage
+                        {
+                            From = new MailAddress(googleSMTPEmailAddress),
+                            To = { item.EmailNotification },
+                            Subject = subject,
+                            Body = htmlContent,
+                            IsBodyHtml = true,
+                        };
 
-                    smtpClient.Send(mailMessage);
-                    _logger.LogInformation("Email successfully send at: {time}", DateTimeOffset.Now);
+                        googleSMTPClient.Send(mailMessage);
+                        _logger.LogInformation("Email successfully send at: {time}", DateTimeOffset.Now);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError("Error while sending email: {error}", ex.Message);
+                    }
                 }
-                catch (Exception ex)
+                else if (senderEmailProvider.Equals("Sendgrid", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    _logger.LogError("Error while sending email: {error}", ex.Message);
+                    var msg = MailHelper.CreateSingleEmail(sendgridFrom, new EmailAddress(item.EmailNotification, item.EmailNotification), subject, plainTextContent, htmlContent);
+                    var response = await sendGridClient.SendEmailAsync(msg);
+
+                    if (response.IsSuccessStatusCode)
+                        _logger.LogInformation("Email successfully send at: {time}", DateTimeOffset.Now);
+                    else
+                        _logger.LogError("Error while sending email: {error}", await response.Body.ReadAsStringAsync());
                 }
             }
 
+            //update item
             item.IsNotificationSend = true;
             _context.Todos.Update(item);
             await _context.SaveChangesAsync();

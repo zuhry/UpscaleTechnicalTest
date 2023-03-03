@@ -11,6 +11,5 @@ public interface ITodoService
     Task<Result<TodoModel, string>> Update(TodoModel todoModel);
     Task<Result<bool, string>> Delete(int id);
     Task<Result<TodoModel, string>> MarkAsCompleted(int id);
-    Task<Result<bool, string>> SendExpiredItemNotification_UsingSendGridAPI();
-    Task<Result<bool, string>> SendExpiredItemNotification_UsingSMTP();
+    Task<Result<bool, string>> SendExpiredItemNotification();
 }
